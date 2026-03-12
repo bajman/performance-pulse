@@ -171,6 +171,7 @@ private struct MetricChartCard: View {
     let metric: PerformanceMetric
     let latestSnapshot: PerformanceSnapshot
     let points: [MetricSeriesPoint]
+    @State private var selectedPoint: MetricSeriesPoint?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -185,11 +186,20 @@ private struct MetricChartCard: View {
 
                 Spacer()
 
-                Text(self.currentValueText)
-                    .font(.system(size: 21, weight: .bold, design: .rounded))
-                    .foregroundStyle(self.accent)
-                    .monospacedDigit()
-                    .contentTransition(.numericText())
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text(self.currentValueText)
+                        .font(.system(size: 21, weight: .bold, design: .rounded))
+                        .foregroundStyle(self.accent)
+                        .monospacedDigit()
+                        .contentTransition(.numericText())
+
+                    if let selectedPoint {
+                        Text(selectedPoint.timestamp.formatted(date: .omitted, time: .standard))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                }
             }
 
             Chart {
@@ -210,7 +220,7 @@ private struct MetricChartCard: View {
                     .foregroundStyle(self.accent)
                 }
 
-                if let lastPoint = self.points.last {
+                if self.selectedPoint == nil, let lastPoint = self.points.last {
                     PointMark(
                         x: .value("Time", lastPoint.timestamp),
                         y: .value("Usage", lastPoint.value))
@@ -233,6 +243,33 @@ private struct MetricChartCard: View {
                     }
                 }
             }
+            .chartOverlay { proxy in
+                GeometryReader { geometry in
+                    if let plotFrame = proxy.plotFrame {
+                        let frame = geometry[plotFrame]
+
+                        Rectangle()
+                            .fill(.clear)
+                            .contentShape(Rectangle())
+                            .onContinuousHover { phase in
+                                self.handleHover(phase, proxy: proxy, plotFrame: frame)
+                            }
+
+                        if let selectedPoint,
+                           let xPosition = proxy.position(forX: selectedPoint.timestamp),
+                           let yPosition = proxy.position(forY: selectedPoint.value)
+                        {
+                            ChartHoverOverlay(
+                                point: selectedPoint,
+                                metric: self.metric,
+                                accent: self.accent,
+                                xPosition: frame.minX + xPosition,
+                                yPosition: frame.minY + yPosition,
+                                plotFrame: frame)
+                        }
+                    }
+                }
+            }
             .frame(height: 130)
         }
         .padding(16)
@@ -240,13 +277,17 @@ private struct MetricChartCard: View {
     }
 
     private var currentValueText: String {
+        if let selectedPoint {
+            return self.valueText(for: selectedPoint.value)
+        }
+
         switch self.metric {
         case .cpu:
-            self.latestSnapshot.formattedCPUUsage
+            return self.latestSnapshot.formattedCPUUsage
         case .memory:
-            self.latestSnapshot.formattedMemoryUsage
+            return self.latestSnapshot.formattedMemoryUsage
         case .download:
-            self.latestSnapshot.formattedDownloadSpeed
+            return self.latestSnapshot.formattedDownloadSpeed
         }
     }
 
@@ -284,9 +325,45 @@ private struct MetricChartCard: View {
     private func axisLabel(for value: Double) -> String {
         switch self.metric {
         case .cpu, .memory:
-            value.formatted(.number.precision(.fractionLength(0)))
+            return value.formatted(.number.precision(.fractionLength(0)))
         case .download:
-            value.formatted(.number.precision(.fractionLength(1)))
+            return value.formatted(.number.precision(.fractionLength(1)))
+        }
+    }
+
+    private func valueText(for value: Double) -> String {
+        switch self.metric {
+        case .cpu, .memory:
+            return value.formatted(.number.precision(.fractionLength(0))) + "%"
+        case .download:
+            if value >= 10 {
+                return value.formatted(.number.precision(.fractionLength(1))) + " MB/s"
+            }
+            return value.formatted(.number.precision(.fractionLength(2))) + " MB/s"
+        }
+    }
+
+    private func handleHover(_ phase: HoverPhase, proxy: ChartProxy, plotFrame: CGRect) {
+        switch phase {
+        case .active(let location):
+            let localX = location.x - plotFrame.minX
+            guard localX >= 0,
+                  localX <= plotFrame.width,
+                  let hoveredDate = proxy.value(atX: localX, as: Date.self)
+            else {
+                self.selectedPoint = nil
+                return
+            }
+
+            self.selectedPoint = self.nearestPoint(to: hoveredDate)
+        case .ended:
+            self.selectedPoint = nil
+        }
+    }
+
+    private func nearestPoint(to date: Date) -> MetricSeriesPoint? {
+        self.points.min { lhs, rhs in
+            abs(lhs.timestamp.timeIntervalSince(date)) < abs(rhs.timestamp.timeIntervalSince(date))
         }
     }
 
@@ -298,6 +375,91 @@ private struct MetricChartCard: View {
             ],
             startPoint: .top,
             endPoint: .bottom)
+    }
+}
+
+private struct ChartHoverOverlay: View {
+    let point: MetricSeriesPoint
+    let metric: PerformanceMetric
+    let accent: Color
+    let xPosition: CGFloat
+    let yPosition: CGFloat
+    let plotFrame: CGRect
+
+    var body: some View {
+        ZStack(alignment: .topLeading) {
+            Path { path in
+                path.move(to: CGPoint(x: self.xPosition, y: self.plotFrame.minY))
+                path.addLine(to: CGPoint(x: self.xPosition, y: self.plotFrame.maxY))
+            }
+            .stroke(
+                Color.white.opacity(0.28),
+                style: StrokeStyle(lineWidth: 1, dash: [4, 6]))
+
+            Circle()
+                .fill(self.accent)
+                .frame(width: 10, height: 10)
+                .overlay {
+                    Circle()
+                        .stroke(Color.white.opacity(0.9), lineWidth: 2)
+                }
+                .position(x: self.xPosition, y: self.yPosition)
+
+            HoverCallout(
+                title: self.valueText,
+                timestamp: self.point.timestamp.formatted(date: .omitted, time: .standard),
+                accent: self.accent)
+            .position(
+                x: self.calloutX,
+                y: max(self.plotFrame.minY + 18, self.yPosition - 28))
+        }
+        .allowsHitTesting(false)
+    }
+
+    private var calloutX: CGFloat {
+        min(max(self.xPosition, self.plotFrame.minX + 70), self.plotFrame.maxX - 70)
+    }
+
+    private var valueText: String {
+        switch self.metric {
+        case .cpu, .memory:
+            return self.point.value.formatted(.number.precision(.fractionLength(0))) + "%"
+        case .download:
+            if self.point.value >= 10 {
+                return self.point.value.formatted(.number.precision(.fractionLength(1))) + " MB/s"
+            }
+            return self.point.value.formatted(.number.precision(.fractionLength(2))) + " MB/s"
+        }
+    }
+}
+
+private struct HoverCallout: View {
+    let title: String
+    let timestamp: String
+    let accent: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(self.title)
+                .font(.caption.weight(.bold))
+                .foregroundStyle(.white)
+                .monospacedDigit()
+
+            Text(self.timestamp)
+                .font(.caption2)
+                .foregroundStyle(.white.opacity(0.72))
+                .monospacedDigit()
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(.black.opacity(0.72))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(self.accent.opacity(0.35), lineWidth: 1)
+                }
+        )
     }
 }
 
