@@ -24,7 +24,8 @@ func historyCapacity() {
                 timestamp: Date(timeIntervalSince1970: Double(second)),
                 cpuUsage: Double(second * 10),
                 memoryUsedBytes: UInt64(second) * 1_000_000_000,
-                totalMemoryBytes: totalMemory))
+                totalMemoryBytes: totalMemory,
+                downloadRateMBps: Double(second)))
     }
 
     #expect(history.snapshots.count == 3)
@@ -41,7 +42,23 @@ func memoryUsageCalculation() {
         timestamp: .now,
         cpuUsage: 42,
         memoryUsedBytes: 12,
-        totalMemoryBytes: 48)
+        totalMemoryBytes: 48,
+        downloadRateMBps: 1.25)
 
     #expect(snapshot.memoryUsage == 25)
+}
+
+@Test("Network counter deltas convert to MB per second")
+func networkDownloadRateCalculation() {
+    let previous = NetworkCounterSnapshot(
+        timestamp: Date(timeIntervalSince1970: 0),
+        receivedBytes: 2_000_000)
+    let current = NetworkCounterSnapshot(
+        timestamp: Date(timeIntervalSince1970: 2),
+        receivedBytes: 8_000_000)
+
+    let rate = current.downloadRateMBps(since: previous)
+
+    #expect(rate != nil)
+    #expect(abs((rate ?? 0) - 3) < 0.0001)
 }

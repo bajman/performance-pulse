@@ -31,6 +31,7 @@ struct DashboardView: View {
                 self.header
                 self.chartCard(for: .cpu)
                 self.chartCard(for: .memory)
+                self.chartCard(for: .download)
                 self.footer
             }
             .padding(20)
@@ -64,6 +65,12 @@ struct DashboardView: View {
                         title: "Memory",
                         valueText: self.store.currentSnapshot.formattedMemoryUsage,
                         tint: .cyan)
+
+                    HeaderMetricReadout(
+                        symbol: "arrow.down.circle",
+                        title: "Down",
+                        valueText: self.store.currentSnapshot.formattedDownloadSpeed,
+                        tint: .mint)
                 }
             }
 
@@ -211,15 +218,19 @@ private struct MetricChartCard: View {
                     .foregroundStyle(.white.opacity(0.92))
                 }
             }
-            .chartYScale(domain: 0...100)
+            .chartYScale(domain: self.yScaleDomain)
             .chartXAxis(.hidden)
             .chartYAxis {
-                AxisMarks(position: .leading, values: [0, 25, 50, 75, 100]) { _ in
+                AxisMarks(position: .leading, values: self.yAxisValues) { value in
                     AxisGridLine(stroke: StrokeStyle(lineWidth: 0.7, dash: [3, 5]))
                         .foregroundStyle(.white.opacity(0.12))
-                    AxisValueLabel()
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                    AxisValueLabel {
+                        if let numericValue = value.as(Double.self) {
+                            Text(self.axisLabel(for: numericValue))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
             }
             .frame(height: 130)
@@ -234,6 +245,8 @@ private struct MetricChartCard: View {
             self.latestSnapshot.formattedCPUUsage
         case .memory:
             self.latestSnapshot.formattedMemoryUsage
+        case .download:
+            self.latestSnapshot.formattedDownloadSpeed
         }
     }
 
@@ -243,6 +256,37 @@ private struct MetricChartCard: View {
             .orange
         case .memory:
             .cyan
+        case .download:
+            .mint
+        }
+    }
+
+    private var yScaleDomain: ClosedRange<Double> {
+        switch self.metric {
+        case .cpu, .memory:
+            return 0...100
+        case .download:
+            let peak = self.points.map(\.value).max() ?? 0
+            return 0...max(1, peak * 1.2)
+        }
+    }
+
+    private var yAxisValues: [Double] {
+        switch self.metric {
+        case .cpu, .memory:
+            return [0, 25, 50, 75, 100]
+        case .download:
+            let upperBound = self.yScaleDomain.upperBound
+            return [0, upperBound / 2, upperBound]
+        }
+    }
+
+    private func axisLabel(for value: Double) -> String {
+        switch self.metric {
+        case .cpu, .memory:
+            value.formatted(.number.precision(.fractionLength(0)))
+        case .download:
+            value.formatted(.number.precision(.fractionLength(1)))
         }
     }
 

@@ -1,8 +1,10 @@
+import Darwin
 import Darwin.Mach
 import Foundation
 
 struct SystemMetricsSampler {
     private var previousCPULoad: CPULoadSnapshot?
+    private var previousNetworkCounter: NetworkCounterSnapshot?
     private let totalMemoryBytes = ProcessInfo.processInfo.physicalMemory
 
     mutating func sample(at date: Date = .now) -> PerformanceSnapshot {
@@ -10,7 +12,8 @@ struct SystemMetricsSampler {
             timestamp: date,
             cpuUsage: self.readCPUUsage(),
             memoryUsedBytes: self.readMemoryUsedBytes() ?? 0,
-            totalMemoryBytes: self.totalMemoryBytes)
+            totalMemoryBytes: self.totalMemoryBytes,
+            downloadRateMBps: self.readDownloadRate(at: date))
     }
 
     private mutating func readCPUUsage() -> Double? {
@@ -59,5 +62,45 @@ struct SystemMetricsSampler {
         let availablePages = UInt64(stats.free_count + stats.inactive_count + stats.speculative_count)
         let availableBytes = min(UInt64(pageSize) * availablePages, self.totalMemoryBytes)
         return self.totalMemoryBytes > availableBytes ? self.totalMemoryBytes - availableBytes : 0
+    }
+
+    private mutating func readDownloadRate(at date: Date) -> Double? {
+        guard let receivedBytes = self.readReceivedBytes() else { return nil }
+        let currentCounter = NetworkCounterSnapshot(timestamp: date, receivedBytes: receivedBytes)
+        defer { self.previousNetworkCounter = currentCounter }
+        guard let previousCounter = self.previousNetworkCounter else { return nil }
+        return currentCounter.downloadRateMBps(since: previousCounter)
+    }
+
+    private func readReceivedBytes() -> UInt64? {
+        var interfacesPointer: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&interfacesPointer) == 0, let firstInterface = interfacesPointer else {
+            return nil
+        }
+
+        defer { freeifaddrs(interfacesPointer) }
+
+        var totalReceivedBytes: UInt64 = 0
+        var currentInterface: UnsafeMutablePointer<ifaddrs>? = firstInterface
+
+        while let interface = currentInterface {
+            let interfaceData = interface.pointee
+            let flags = Int32(interfaceData.ifa_flags)
+            let isUpAndRunning = (flags & (IFF_UP | IFF_RUNNING)) == (IFF_UP | IFF_RUNNING)
+            let isLoopback = (flags & IFF_LOOPBACK) == IFF_LOOPBACK
+
+            if isUpAndRunning,
+               !isLoopback,
+               let address = interfaceData.ifa_addr,
+               address.pointee.sa_family == UInt8(AF_LINK),
+               let statsPointer = interfaceData.ifa_data?.assumingMemoryBound(to: if_data.self)
+            {
+                totalReceivedBytes += UInt64(statsPointer.pointee.ifi_ibytes)
+            }
+
+            currentInterface = interfaceData.ifa_next
+        }
+
+        return totalReceivedBytes
     }
 }

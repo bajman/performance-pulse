@@ -3,6 +3,7 @@ import Foundation
 enum PerformanceMetric: String, CaseIterable, Identifiable, Sendable {
     case cpu
     case memory
+    case download
 
     var id: Self { self }
 
@@ -12,6 +13,8 @@ enum PerformanceMetric: String, CaseIterable, Identifiable, Sendable {
             "CPU"
         case .memory:
             "Memory"
+        case .download:
+            "Download"
         }
     }
 
@@ -21,6 +24,8 @@ enum PerformanceMetric: String, CaseIterable, Identifiable, Sendable {
             "System-wide utilization"
         case .memory:
             "Physical memory in use"
+        case .download:
+            "Current receive throughput"
         }
     }
 }
@@ -30,6 +35,7 @@ struct PerformanceSnapshot: Sendable {
     let cpuUsage: Double?
     let memoryUsedBytes: UInt64
     let totalMemoryBytes: UInt64
+    let downloadRateMBps: Double?
 
     var memoryUsage: Double {
         guard self.totalMemoryBytes > 0 else { return 0 }
@@ -50,11 +56,12 @@ struct PerformanceSnapshot: Sendable {
         "\(Self.byteString(self.memoryUsedBytes)) / \(Self.byteString(self.totalMemoryBytes))"
     }
 
-    var menuBarSummary: String {
-        let cpuSummary = self.cpuUsage.map {
-            "CPU \($0.formatted(.number.precision(.fractionLength(0))))%"
-        } ?? "CPU --"
-        return "\(cpuSummary)  MEM \(self.memoryUsage.formatted(.number.precision(.fractionLength(0))))%"
+    var formattedDownloadSpeed: String {
+        guard let downloadRateMBps else { return "--" }
+        if downloadRateMBps >= 10 {
+            return downloadRateMBps.formatted(.number.precision(.fractionLength(1))) + " MB/s"
+        }
+        return downloadRateMBps.formatted(.number.precision(.fractionLength(2))) + " MB/s"
     }
 
     static func placeholder(totalMemoryBytes: UInt64 = ProcessInfo.processInfo.physicalMemory) -> Self {
@@ -62,7 +69,8 @@ struct PerformanceSnapshot: Sendable {
             timestamp: .now,
             cpuUsage: nil,
             memoryUsedBytes: 0,
-            totalMemoryBytes: totalMemoryBytes)
+            totalMemoryBytes: totalMemoryBytes,
+            downloadRateMBps: nil)
     }
 
     private static func byteString(_ bytes: UInt64) -> String {
@@ -104,6 +112,11 @@ struct MetricHistory: Sendable {
             self.snapshots.map { snapshot in
                 MetricSeriesPoint(timestamp: snapshot.timestamp, value: snapshot.memoryUsage)
             }
+        case .download:
+            self.snapshots.compactMap { snapshot in
+                guard let downloadRateMBps = snapshot.downloadRateMBps else { return nil }
+                return MetricSeriesPoint(timestamp: snapshot.timestamp, value: downloadRateMBps)
+            }
         }
     }
 }
@@ -126,6 +139,20 @@ struct CPULoadSnapshot: Sendable {
         let activeDelta = userDelta + systemDelta + niceDelta
         let usage = (Double(activeDelta) / Double(totalDelta)) * 100
         return usage.clamped(to: 0...100)
+    }
+}
+
+struct NetworkCounterSnapshot: Sendable {
+    let timestamp: Date
+    let receivedBytes: UInt64
+
+    func downloadRateMBps(since previous: Self) -> Double? {
+        guard self.receivedBytes >= previous.receivedBytes else { return nil }
+        let interval = self.timestamp.timeIntervalSince(previous.timestamp)
+        guard interval > 0 else { return nil }
+
+        let bytesDelta = self.receivedBytes - previous.receivedBytes
+        return Double(bytesDelta) / 1_000_000 / interval
     }
 }
 

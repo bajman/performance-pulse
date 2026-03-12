@@ -1,12 +1,12 @@
 # Performance Pulse
 
-Liquid Glass-inspired macOS menu bar monitor with live CPU and memory charts.
+Liquid Glass-inspired macOS menu bar monitor with live CPU, memory, and download-speed charts.
 
 ![Performance Pulse screenshot](assets/performance-pulse.png)
 
 ## Overview
 
-Performance Pulse is a native SwiftUI menu bar app for macOS Tahoe that samples system CPU and memory usage in real time and renders compact live charts in a polished popover.
+Performance Pulse is a native SwiftUI menu bar app for macOS Tahoe that samples system CPU usage, memory usage, and current download speed in real time and renders compact live charts in a polished popover.
 
 This is intentionally a menu bar utility, not a WidgetKit widget. WidgetKit timelines are not designed for true second-by-second updates, while a menu bar app can sample continuously and keep the graphs live.
 
@@ -14,6 +14,7 @@ This is intentionally a menu bar utility, not a WidgetKit widget. WidgetKit time
 
 - Live CPU usage sampling using Mach host statistics
 - Live memory usage sampling using Mach VM statistics
+- Live download-speed sampling using active network interface byte counters
 - Swift Charts-based history graphs
 - Tahoe-style Liquid Glass presentation with Reduce Transparency fallback
 - Compact menu bar badges for CPU and memory at-a-glance
