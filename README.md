@@ -3,7 +3,7 @@
 Liquid Glass-inspired macOS menu bar monitor with live CPU, memory, and download-speed charts.
 
 <p align="center">
-  <img src="assets/performance-pulse.png" alt="Performance Pulse screenshot" width="454" />
+  <img src="assets/performance-pulse.png" alt="Performance Pulse screenshot" width="440" />
 </p>
 
 ## Overview
@@ -19,7 +19,7 @@ This is intentionally a menu bar utility, not a WidgetKit widget. WidgetKit time
 - Live download-speed sampling using active network interface byte counters
 - Swift Charts-based history graphs
 - Tahoe-style Liquid Glass presentation with Reduce Transparency fallback
-- Compact menu bar badges for CPU and memory at-a-glance
+- Compact menu bar readout for CPU, memory, and receive speed at a glance
 
 ## Build And Run
 

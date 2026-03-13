@@ -67,6 +67,7 @@ final class StatusBarController: NSObject {
         withObservationTracking {
             _ = self.store.currentSnapshot.formattedCPUUsage
             _ = self.store.currentSnapshot.formattedMemoryUsage
+            _ = self.store.currentSnapshot.formattedDownloadSpeed
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
                 self?.updateStatusItem()
@@ -79,14 +80,16 @@ final class StatusBarController: NSObject {
         guard let button = self.statusItem.button else { return }
 
         let title = NSMutableAttributedString()
-        title.append(self.makeSegment("CPU ", font: .systemFont(ofSize: 10, weight: .medium), color: .secondaryLabelColor))
-        title.append(self.makeSegment(self.store.currentSnapshot.formattedCPUUsage, font: .monospacedSystemFont(ofSize: 12, weight: .semibold), color: .labelColor))
-        title.append(self.makeSegment("   MEM ", font: .systemFont(ofSize: 10, weight: .medium), color: .secondaryLabelColor))
-        title.append(self.makeSegment(self.store.currentSnapshot.formattedMemoryUsage, font: .monospacedSystemFont(ofSize: 12, weight: .semibold), color: .labelColor))
+        title.append(self.makeSegment("CPU ", font: .systemFont(ofSize: 10, weight: .medium), color: NSColor.white.withAlphaComponent(0.92)))
+        title.append(self.makeSegment(self.store.currentSnapshot.formattedCPUUsage, font: .monospacedSystemFont(ofSize: 12, weight: .semibold), color: .white))
+        title.append(self.makeSegment("   MEM ", font: .systemFont(ofSize: 10, weight: .medium), color: NSColor.white.withAlphaComponent(0.92)))
+        title.append(self.makeSegment(self.store.currentSnapshot.formattedMemoryUsage, font: .monospacedSystemFont(ofSize: 12, weight: .semibold), color: .white))
+        title.append(self.makeSegment("   RX ", font: .systemFont(ofSize: 10, weight: .medium), color: NSColor.white.withAlphaComponent(0.92)))
+        title.append(self.makeSegment(self.store.currentSnapshot.formattedDownloadSpeed, font: .monospacedSystemFont(ofSize: 12, weight: .semibold), color: .white))
 
         button.attributedTitle = title
-        button.toolTip = "CPU \(self.store.currentSnapshot.formattedCPUUsage)  Memory \(self.store.currentSnapshot.formattedMemoryUsage)"
-        self.statusItem.length = max(112, ceil(title.size().width) + 18)
+        button.toolTip = "CPU \(self.store.currentSnapshot.formattedCPUUsage)  Memory \(self.store.currentSnapshot.formattedMemoryUsage)  Receive \(self.store.currentSnapshot.formattedDownloadSpeed)"
+        self.statusItem.length = max(196, ceil(title.size().width) + 18)
     }
 
     private func makeSegment(_ value: String, font: NSFont, color: NSColor) -> NSAttributedString {
