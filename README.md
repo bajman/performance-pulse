@@ -1,35 +1,32 @@
 # Performance Pulse
 
-Liquid Glass-inspired macOS menu bar monitor with live CPU, memory, and download-speed charts.
+macOS menu bar monitor for CPU usage, memory usage, and receive speed.
 
 <p align="center">
   <img src="assets/performance-pulse.png" alt="Performance Pulse screenshot" width="440" />
 </p>
 
-## Overview
-
-Performance Pulse is a native SwiftUI menu bar app for macOS Tahoe that samples system CPU usage, memory usage, and current download speed in real time and renders compact live charts in a polished popover.
-
-This is intentionally a menu bar utility, not a WidgetKit widget. WidgetKit timelines are not designed for true second-by-second updates, while a menu bar app can sample continuously and keep the graphs live.
-
 ## Features
 
-- Live CPU usage sampling using Mach host statistics
-- Live memory usage sampling using Mach VM statistics
-- Live download-speed sampling using active network interface byte counters
-- Swift Charts-based history graphs
-- Tahoe-style Liquid Glass presentation with Reduce Transparency fallback
-- Compact menu bar readout for CPU, memory, and receive speed at a glance
+- CPU, memory, and receive-speed sampling once per second
+- Live history charts for all three metrics
+- Menu bar readout for CPU, memory, and receive speed
+- Pause/resume controls and Reduce Transparency fallback
 
-## Build And Run
+## Requirements
+
+- macOS 26+
+- Swift 6
+
+## Run
 
 ```bash
 swift run
 ```
 
-You can also open the package in Xcode 26.4+ and run the `PerformancePulse` executable target.
+You can also open the package in Xcode and run the `PerformancePulse` executable target.
 
-## Install To Applications
+## Install
 
 ```bash
 ./scripts/install_app.sh
@@ -40,9 +37,3 @@ You can also open the package in Xcode 26.4+ and run the `PerformancePulse` exec
 ```bash
 swift test
 ```
-
-## Tech Notes
-
-- Requires macOS 26+
-- Built with Swift 6, SwiftUI, and Charts
-- The UI uses real glass only on the outer shell and control surfaces; chart cards stay more restrained to avoid over-glassing dense content

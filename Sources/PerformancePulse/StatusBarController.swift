@@ -3,11 +3,13 @@ import Observation
 import SwiftUI
 
 @MainActor
-final class StatusBarController: NSObject {
+final class StatusBarController: NSObject, NSPopoverDelegate {
     private let store: PerformanceStore
     private let liquidGlassActive: Bool
     private let statusItem: NSStatusItem
     private let popover: NSPopover
+    private var outsideClickMonitor: Any?
+    private var resignActiveObserver: NSObjectProtocol?
 
     init(store: PerformanceStore, liquidGlassActive: Bool) {
         self.store = store
@@ -25,7 +27,7 @@ final class StatusBarController: NSObject {
     @objc
     private func togglePopover(_ sender: Any?) {
         if self.popover.isShown {
-            self.popover.close()
+            self.closePopover()
         } else {
             self.showPopover()
         }
@@ -50,6 +52,7 @@ final class StatusBarController: NSObject {
         let hostingController = NSHostingController(rootView: dashboard)
         hostingController.view.layoutSubtreeIfNeeded()
 
+        self.popover.delegate = self
         self.popover.animates = true
         self.popover.behavior = .applicationDefined
         self.popover.contentViewController = hostingController
@@ -61,13 +64,18 @@ final class StatusBarController: NSObject {
 
         NSApp.activate(ignoringOtherApps: true)
         self.popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        self.installDismissObservers()
+    }
+
+    private func closePopover() {
+        guard self.popover.isShown else { return }
+        self.popover.close()
+        self.removeDismissObservers()
     }
 
     private func bindStatusItem() {
         withObservationTracking {
-            _ = self.store.currentSnapshot.formattedCPUUsage
-            _ = self.store.currentSnapshot.formattedMemoryUsage
-            _ = self.store.currentSnapshot.formattedDownloadSpeed
+            _ = self.store.currentSnapshot
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
                 self?.updateStatusItem()
@@ -99,5 +107,43 @@ final class StatusBarController: NSObject {
                 .font: font,
                 .foregroundColor: color,
             ])
+    }
+
+    private func installDismissObservers() {
+        if self.outsideClickMonitor == nil {
+            self.outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(
+                matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] _ in
+                    Task { @MainActor [weak self] in
+                        self?.closePopover()
+                    }
+                }
+        }
+
+        if self.resignActiveObserver == nil {
+            self.resignActiveObserver = NotificationCenter.default.addObserver(
+                forName: NSApplication.didResignActiveNotification,
+                object: NSApp,
+                queue: .main) { [weak self] _ in
+                    Task { @MainActor [weak self] in
+                        self?.closePopover()
+                    }
+                }
+        }
+    }
+
+    private func removeDismissObservers() {
+        if let outsideClickMonitor {
+            NSEvent.removeMonitor(outsideClickMonitor)
+            self.outsideClickMonitor = nil
+        }
+
+        if let resignActiveObserver {
+            NotificationCenter.default.removeObserver(resignActiveObserver)
+            self.resignActiveObserver = nil
+        }
+    }
+
+    func popoverDidClose(_ notification: Notification) {
+        self.removeDismissObservers()
     }
 }

@@ -2,24 +2,6 @@ import AppKit
 import Charts
 import SwiftUI
 
-struct MenuBarLabelView: View {
-    let store: PerformanceStore
-
-    var body: some View {
-        HStack(spacing: 8) {
-            MenuBarMetricBadge(
-                symbol: "cpu",
-                valueText: self.store.currentSnapshot.formattedCPUUsage,
-                tint: .orange)
-
-            MenuBarMetricBadge(
-                symbol: "memorychip",
-                valueText: self.store.currentSnapshot.formattedMemoryUsage,
-                tint: .cyan)
-        }
-    }
-}
-
 struct DashboardView: View {
     @Bindable var store: PerformanceStore
 
@@ -116,31 +98,6 @@ struct DashboardView: View {
                 NSApplication.shared.terminate(nil)
             }
             .adaptiveGlassButton(prominent: true)
-        }
-    }
-}
-
-private struct MenuBarMetricBadge: View {
-    let symbol: String
-    let valueText: String
-    let tint: Color
-
-    var body: some View {
-        HStack(spacing: 4) {
-            ZStack {
-                Circle()
-                    .fill(self.tint.opacity(0.18))
-                    .frame(width: 15, height: 15)
-                Image(systemName: self.symbol)
-                    .font(.system(size: 8, weight: .bold))
-                    .foregroundStyle(self.tint)
-            }
-
-            Text(self.valueText)
-                .font(.system(size: 11, weight: .bold, design: .rounded))
-                .monospacedDigit()
-                .contentTransition(.numericText())
-                .animation(.smooth(duration: 0.18), value: self.valueText)
         }
     }
 }
@@ -253,71 +210,6 @@ private struct MetricChartCard: View {
         }
     }
 
-    private var yScaleDomain: ClosedRange<Double> {
-        switch self.metric {
-        case .cpu, .memory:
-            return 0...100
-        case .download:
-            let peak = self.points.map(\.value).max() ?? 0
-            return 0...max(1, peak * 1.2)
-        }
-    }
-
-    private var yAxisValues: [Double] {
-        switch self.metric {
-        case .cpu, .memory:
-            return [0, 25, 50, 75, 100]
-        case .download:
-            let upperBound = self.yScaleDomain.upperBound
-            return [0, upperBound / 2, upperBound]
-        }
-    }
-
-    private func axisLabel(for value: Double) -> String {
-        switch self.metric {
-        case .cpu, .memory:
-            return value.formatted(.number.precision(.fractionLength(0)))
-        case .download:
-            return value.formatted(.number.precision(.fractionLength(1)))
-        }
-    }
-
-    private func valueText(for value: Double) -> String {
-        switch self.metric {
-        case .cpu, .memory:
-            return value.formatted(.number.precision(.fractionLength(0))) + "%"
-        case .download:
-            if value >= 10 {
-                return value.formatted(.number.precision(.fractionLength(1))) + " MB/s"
-            }
-            return value.formatted(.number.precision(.fractionLength(2))) + " MB/s"
-        }
-    }
-
-    private func handleHover(_ phase: HoverPhase, proxy: ChartProxy, plotFrame: CGRect) {
-        switch phase {
-        case .active(let location):
-            let localX = location.x - plotFrame.minX
-            guard localX >= 0,
-                  localX <= plotFrame.width,
-                  let hoveredDate = proxy.value(atX: localX, as: Date.self)
-            else {
-                self.selectedPoint = nil
-                return
-            }
-
-            self.selectedPoint = self.nearestPoint(to: hoveredDate)
-        case .ended:
-            self.selectedPoint = nil
-        }
-    }
-
-    private func nearestPoint(to date: Date) -> MetricSeriesPoint? {
-        self.points.min { lhs, rhs in
-            abs(lhs.timestamp.timeIntervalSince(date)) < abs(rhs.timestamp.timeIntervalSince(date))
-        }
-    }
-
     private var areaGradient: LinearGradient {
         LinearGradient(
             colors: [
@@ -338,11 +230,11 @@ private struct LiveMetricChart: View {
     let windowDuration: TimeInterval
     let isLive: Bool
 
-    private let frameInterval = 1.0 / 30.0
+    private let frameInterval = 1.0 / 24.0
 
     var body: some View {
         Group {
-            if self.isLive {
+            if self.isLive, self.selectedPoint == nil {
                 TimelineView(.periodic(from: .now, by: self.frameInterval)) { context in
                     self.chartBody(at: self.displayDate(for: context.date))
                 }
@@ -441,7 +333,7 @@ private struct LiveMetricChart: View {
     }
 
     private func chartDomain(endingAt now: Date) -> ClosedRange<Date> {
-        let endDate = self.selectedPoint == nil ? Swift.max(now, self.referenceDate) : self.referenceDate
+        let endDate = Swift.max(now, self.referenceDate)
         return endDate.addingTimeInterval(-self.windowDuration)...endDate
     }
 

@@ -11,6 +11,7 @@ final class PerformanceStore {
 
     let sampleInterval: Duration
     private var samplingTask: Task<Void, Never>?
+    private var samplingGeneration = 0
 
     var historyWindowDuration: TimeInterval {
         self.sampleInterval.timeInterval * Double(self.history.capacity)
@@ -41,28 +42,28 @@ final class PerformanceStore {
         guard self.samplingTask == nil else { return }
 
         self.isSampling = true
-        self.samplingTask = Task { [weak self] in
-            guard let self else { return }
-            await self.runSamplingLoop()
-        }
-    }
+        self.samplingGeneration &+= 1
 
-    private func runSamplingLoop() async {
-        var sampler = SystemMetricsSampler()
-        self.ingest(sampler.sample())
+        let generation = self.samplingGeneration
+        let sampleInterval = self.sampleInterval
 
-        while !Task.isCancelled {
-            do {
-                try await Task.sleep(for: self.sampleInterval)
-            } catch {
-                break
+        self.samplingTask = Task.detached(priority: .utility) { [weak self] in
+            var sampler = SystemMetricsSampler()
+            await self?.ingest(sampler.sample())
+
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(for: sampleInterval)
+                } catch {
+                    break
+                }
+
+                guard !Task.isCancelled else { break }
+                await self?.ingest(sampler.sample())
             }
 
-            guard !Task.isCancelled else { break }
-            self.ingest(sampler.sample())
+            await self?.samplingLoopDidFinish(for: generation)
         }
-
-        self.samplingTask = nil
     }
 
     private func ingest(_ snapshot: PerformanceSnapshot) {
@@ -76,6 +77,15 @@ final class PerformanceStore {
 
         withTransaction(Transaction(animation: nil)) {
             self.history = updatedHistory
+        }
+    }
+
+    private func samplingLoopDidFinish(for generation: Int) {
+        guard generation == self.samplingGeneration else { return }
+        self.samplingTask = nil
+
+        if self.isSampling {
+            self.isSampling = false
         }
     }
 }

@@ -6,6 +6,7 @@ struct SystemMetricsSampler {
     private var previousCPULoad: CPULoadSnapshot?
     private var previousNetworkCounter: NetworkCounterSnapshot?
     private let totalMemoryBytes = ProcessInfo.processInfo.physicalMemory
+    private let pageSize = Self.resolvePageSize()
 
     mutating func sample(at date: Date = .now) -> PerformanceSnapshot {
         PerformanceSnapshot(
@@ -56,11 +57,9 @@ struct SystemMetricsSampler {
 
         guard result == KERN_SUCCESS else { return nil }
 
-        var pageSize: vm_size_t = 0
-        host_page_size(mach_host_self(), &pageSize)
-
+        guard self.pageSize > 0 else { return nil }
         let availablePages = UInt64(stats.free_count + stats.inactive_count + stats.speculative_count)
-        let availableBytes = min(UInt64(pageSize) * availablePages, self.totalMemoryBytes)
+        let availableBytes = min(UInt64(self.pageSize) * availablePages, self.totalMemoryBytes)
         return self.totalMemoryBytes > availableBytes ? self.totalMemoryBytes - availableBytes : 0
     }
 
@@ -102,5 +101,11 @@ struct SystemMetricsSampler {
         }
 
         return totalReceivedBytes
+    }
+
+    private static func resolvePageSize() -> vm_size_t {
+        var pageSize: vm_size_t = 0
+        host_page_size(mach_host_self(), &pageSize)
+        return pageSize
     }
 }
