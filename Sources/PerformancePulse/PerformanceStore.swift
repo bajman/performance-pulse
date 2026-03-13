@@ -12,6 +12,10 @@ final class PerformanceStore {
     let sampleInterval: Duration
     private var samplingTask: Task<Void, Never>?
 
+    var historyWindowDuration: TimeInterval {
+        self.sampleInterval.timeInterval * Double(self.history.capacity)
+    }
+
     init(sampleInterval: Duration = .seconds(1), historyCapacity: Int = 90) {
         self.sampleInterval = sampleInterval
         self.currentSnapshot = .placeholder()
@@ -62,10 +66,25 @@ final class PerformanceStore {
     }
 
     private func ingest(_ snapshot: PerformanceSnapshot) {
-        withAnimation(.smooth(duration: 0.25)) {
+        withAnimation(.smooth(duration: 0.18)) {
             self.currentSnapshot = snapshot
             self.lastUpdate = snapshot.timestamp
-            self.history.append(snapshot)
         }
+
+        var updatedHistory = self.history
+        updatedHistory.append(snapshot)
+
+        withTransaction(Transaction(animation: nil)) {
+            self.history = updatedHistory
+        }
+    }
+}
+
+private extension Duration {
+    var timeInterval: TimeInterval {
+        let components = self.components
+        let attosecondsPerSecond = 1_000_000_000_000_000_000.0
+        return TimeInterval(components.seconds)
+            + (Double(components.attoseconds) / attosecondsPerSecond)
     }
 }

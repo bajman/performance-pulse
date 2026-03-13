@@ -2,7 +2,9 @@
 
 Liquid Glass-inspired macOS menu bar monitor with live CPU, memory, and download-speed charts.
 
-![Performance Pulse screenshot](assets/performance-pulse.png)
+<p align="center">
+  <img src="assets/performance-pulse.png" alt="Performance Pulse screenshot" width="454" />
+</p>
 
 ## Overview
 
