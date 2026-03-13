@@ -29,6 +29,12 @@ swift run
 
 You can also open the package in Xcode 26.4+ and run the `PerformancePulse` executable target.
 
+## Install To Applications
+
+```bash
+./scripts/install_app.sh
+```
+
 ## Test
 
 ```bash
