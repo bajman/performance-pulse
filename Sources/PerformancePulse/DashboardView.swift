@@ -231,6 +231,7 @@ private struct LiveMetricChart: View {
     let isLive: Bool
 
     private let frameInterval = 1.0 / 24.0
+    private let plotLeadingInset: CGFloat = 12
 
     var body: some View {
         Group {
@@ -272,7 +273,7 @@ private struct LiveMetricChart: View {
                     x: .value("Time", point.timestamp),
                     y: .value("Usage", point.value))
                 .interpolationMethod(.catmullRom)
-                .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round, lineJoin: .round))
+                .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .butt, lineJoin: .round))
                 .foregroundStyle(self.accent)
             }
 
@@ -299,6 +300,11 @@ private struct LiveMetricChart: View {
                     }
                 }
             }
+        }
+        .chartPlotStyle { plotArea in
+            plotArea
+                .padding(.leading, self.plotLeadingInset)
+                .clipped()
         }
         .chartOverlay { proxy in
             GeometryReader { geometry in
